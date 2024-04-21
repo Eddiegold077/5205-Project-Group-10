@@ -181,8 +181,8 @@ coef(cv_lasso, s = cv_lasso$lambda.1se) |>
 lambda = cv_lasso$lambda.min
 coefficients = coef(cv_lasso, s = lambda)
 non_zero_coef = coefficients[coefficients[,1] !=0, 1, drop = F]
-selected_variables = rownames(non_zero_coef)[-1]
-cleaned_data = x[, selected_variables]
+selected_variables = c(rownames(non_zero_coef)[-1], 'HeartDisease')
+cleaned_data = heart[, selected_variables]
 ```
 ```{r}
 # Output the cleaned data
