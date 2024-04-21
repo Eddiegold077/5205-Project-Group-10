@@ -5,7 +5,7 @@ Research Question 1:
 Based on demographic, clinical, and physiological parameters in this dataset, what are the most significant predictors of heart disease? How do these factors interact with each other to influence the overall risk?
 
 Research Question 2:
-Can patients be classified effectively into distinct groups with different cardiovas- cular risk characteristics through cluster analysis, and what specific combinations characteristics distinguish these clusters?
+Can patients be classified effectively into distinct groups with different cardiovascular risk characteristics through cluster analysis, and what specific combinations characteristics distinguish these clusters?
 
 Research Question 3:
 Utilizing the classification method to the whole participants, are we able to predict the probability of developing heart disease with better accuracy?  
