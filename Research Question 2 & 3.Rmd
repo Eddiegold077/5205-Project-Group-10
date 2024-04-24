@@ -1,0 +1,207 @@
+---
+title: "Research Question 2 & 3"
+author: "Jintong He, Yujia Ge"
+date: "2024-04-23"
+output: html_document
+---
+
+## Load the data
+```{r}
+data = read.csv('/Users/yujia/Downloads/cleaned_data.csv')
+# Replace the file path with your own
+```
+
+## Data preparation
+```{r}
+# Select all those who have been diagnosed with heart disease
+patients = data[data$HeartDisease == 1,]
+summary(patients)
+
+# All the variables in the dataset are already needs-based variables
+data_cluster = patients[, 1:9]
+
+# Scale the variables
+data_cluster = scale(data_cluster)
+head(data_cluster)
+```
+
+## Hierarchical clustering
+```{r}
+d = dist(x = data_cluster,method = 'euclidean') 
+clusters = hclust(d = d,method='ward.D2')
+plot(clusters)
+cor(cophenetic(clusters),d)  # Goodness of fit
+
+# Use factoextra for visualizing the dendrogram
+library(factoextra)
+fviz_dend(x=clusters,k=2)
+fviz_dend(x=clusters,k=3)
+fviz_dend(x=clusters,k=4)
+library(gridExtra)
+grid.arrange(fviz_dend(x = clusters,k=2),
+             fviz_dend(x = clusters,k=3),
+             fviz_dend(x = clusters,k=4)
+)
+
+# By examining the height between branch splits, a 2-cluster solution seems to be great.
+h_segments = cutree(tree = clusters,k=2)
+table(h_segments)
+
+# Visualize the clusters
+library(psych)
+temp = data.frame(cluster = factor(h_segments),
+                  factor1 = fa(data_cluster,nfactors = 2,rotate = 'varimax')$scores[,1],
+                  factor2 = fa(data_cluster,nfactors = 2,rotate = 'varimax')$scores[,2])
+ggplot(temp,aes(x=factor1,y=factor2,col=cluster))+
+  geom_point()
+```
+
+## K-means clustering
+```{r}
+# We will go with a 2-cluster k-means clustering solution
+set.seed(1031)
+km = kmeans(x = data_cluster,centers = 2,iter.max=10000,nstart=25)
+k_segments = km$cluster
+table(k_segments)
+
+# Visualize
+library(psych)
+temp = data.frame(cluster = factor(k_segments),
+                  factor1 = fa(data_cluster,nfactors = 2,rotate = 'varimax')$scores[,1],
+                  factor2 = fa(data_cluster,nfactors = 2,rotate = 'varimax')$scores[,2])
+ggplot(temp,aes(x=factor1,y=factor2,col=cluster))+
+  geom_point()
+```
+## variables to be included in prediction
+```{r}
+cluster_means <- aggregate(data_cluster, by = list(k_segments), FUN = mean)
+cluster_medians <- aggregate(data_cluster, by = list(k_segments), FUN = median)
+
+# Step 2: Feature Selection
+# Calculate the variability of each feature across clusters
+feature_variability <- apply(cluster_means[, -1], 2, sd)
+
+# Select top features based on variability
+selected_features <- names(sort(feature_variability, decreasing = TRUE)[1:3])
+selected_features
+```
+
+## Model-based clustering
+```{r}
+library(mclust)
+clusters_mclust = Mclust(data_cluster)
+summary(clusters_mclust)
+
+# The optimal cluster solution as shown is 2-cluster solution
+m_clusters = Mclust(data = data_cluster,G = 2)
+m_segments = m_clusters$classification
+table(m_segments)
+
+# Visualize
+library(psych)
+temp = data.frame(cluster = factor(m_segments),
+                  factor1 = fa(data_cluster,nfactors = 2,rotate = 'varimax')$scores[,1],
+                  factor2 = fa(data_cluster,nfactors = 2,rotate = 'varimax')$scores[,2])
+ggplot(temp,aes(x=factor1,y=factor2,col=cluster))+
+  geom_point()
+```
+
+## variables to be included in prediction
+```{r}
+cluster_means <- aggregate(data_cluster, by = list(m_segments), FUN = mean)
+cluster_medians <- aggregate(data_cluster, by = list(m_segments), FUN = median)
+
+# Step 3: Feature Selection
+# Calculate the variability of each feature across clusters
+feature_variability <- apply(cluster_means[, -1], 2, sd)
+
+# Select top features based on variability
+selected_features <- names(sort(feature_variability, decreasing = TRUE)[1:3])
+selected_features
+```
+## Analysis
+```{r}
+  # Contrast results
+table(h_segments)
+table(k_segments)
+table(m_segments)
+
+# Profile clusters
+patients2 = cbind(patients,h_segments, k_segments,m_segments)
+
+library(dplyr)
+# Use hierarchical segments to examine means of each needs-based variable
+patients2 %>%
+  select(Age:ST_Slope,h_segments)%>%
+  group_by(h_segments)%>%
+  summarize_all(function(x) round(mean(x,na.rm=T),2))%>%
+  data.frame()
+
+# Use k-means segments to examine means of each needs-based variable
+patients2 %>%
+  select(Age:ST_Slope,k_segments)%>%
+  group_by(k_segments)%>%
+  summarize_all(function(x) round(mean(x,na.rm=T),2))%>%
+  data.frame()
+
+# Use model-based segments to examine means of each needs-based variable
+patients2 %>%
+  select(Age:ST_Slope,m_segments)%>%
+  group_by(m_segments)%>%
+  summarize_all(function(x) round(mean(x,na.rm=T),2))%>%
+  data.frame()
+```
+
+## model based on factors suggested by clustering
+```{r}
+library(caTools)  # For train/test split
+
+# Set seed for reproducibility
+set.seed(1031)
+split = sample(1:nrow(data),size = 0.75*nrow(data ))
+train = data[split,]
+test = data[-split,]
+model <- glm(HeartDisease ~  ChestPainType+Sex+MaxHR + ExerciseAngina + Oldpeak + MaxHR    , data = train, family = binomial)
+
+# Step 4: Evaluate the Model
+# Make predictions on the testing data
+predictions <- predict(model, newdata = test, type = "response")
+
+accuracy <- mean((predictions > 0.5) == test$HeartDisease)
+
+# Display the accuracy
+accuracy
+```
+
+## model based on all factors
+```{r}
+model <- glm(HeartDisease ~ ., data = train, family = binomial)
+
+# Step 4: Evaluate the Model
+# Make predictions on the testing data
+predictions <- predict(model, newdata = test, type = "response")
+accuracy <- mean((predictions > 0.5) == test$HeartDisease)
+
+# Display the accuracy
+accuracy
+```
+
+#check for Multicollinearity
+```{r}
+correlation_matrix <- cor(data[, -which(names(data) == "HeartDisease")])
+
+# Print Correlation Matrix
+print(correlation_matrix)
+
+# Calculate Variance Inflation Factor (VIF)
+library(car)
+vif_values <- vif(lm(HeartDisease ~ ., data = data))
+
+# Print VIF values
+print(vif_values)
+```
+
+## Conclusion
+After trying the three clustering method, we found that for each clustering method, the first group of sample has a significantly larger number.
+For hierarchical clustering method and k-means clustering method, group 1 features higher cholesteral, higher max heart rate, and higher oldpeak compared to group 2;
+For model-based clustering method, group 1 features higher chestpaintype value, which means that group 1 may have a larger proportion of type 3 and type 4. Besides, group 1 has lower cholesterol level, higher fastingBS, higher maxHR, lower exerciseAngina, and lower oldpeak compared to group 2.
